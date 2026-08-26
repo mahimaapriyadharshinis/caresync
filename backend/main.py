@@ -7,6 +7,8 @@ urgently — to push it across the network.
 """
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 
 from ambulance.router import choose_hospital, rank_hospitals
@@ -18,13 +20,23 @@ from .congestion import CongestionProvider
 from .controller_client import ControllerClient
 from .schemas import HospitalStateOut, ResourceUpdateIn, SyncDecisionOut
 from .storage import get_store
-
-app = FastAPI(title="CARESync Backend", version="0.1.0")
+from .sync_scheduler import SyncScheduler
 
 engine = AdaptiveSyncEngine()
 store = get_store()
 congestion = CongestionProvider()
 controller = ControllerClient()
+scheduler = SyncScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler.start()
+    yield
+    await scheduler.stop()
+
+
+app = FastAPI(title="CARESync Backend", version="0.1.0", lifespan=lifespan)
 
 
 @app.post("/hospitals/{hospital_id}/update", response_model=SyncDecisionOut)
@@ -45,12 +57,20 @@ async def report_update(hospital_id: str, payload: ResourceUpdateIn) -> SyncDeci
 
     score = engine.evaluate(update, congestion.get(hospital_id))
 
+    # Network-layer QoS: does this hospital's traffic get a high-priority
+    # OpenFlow flow? Tied to the engine's own tier, independent of
+    # sync_mode below.
     mac = HOSPITAL_MACS.get(hospital_id)
     if mac is not None:
         if score.tier == SyncTier.CRITICAL:
             controller.mark_critical(mac)
         else:
             controller.clear_critical(mac)
+
+    # Application-layer timing: does this update actually go out now, or
+    # get batched for the next flush? Governed by SYNC_MODE — this is
+    # the live version of evaluation/strategies.py's three strategies.
+    delivery = scheduler.record(hospital_id, payload.resource.value, score.tier)
 
     await store.set_value(hospital_id, payload.resource.value, payload.new_value, payload.capacity)
     await store.record_decision(update, score)
@@ -66,6 +86,9 @@ async def report_update(hospital_id: str, payload: ResourceUpdateIn) -> SyncDeci
         tier=score.tier,
         reason=score.reason,
         timestamp=update.timestamp,
+        sync_mode=scheduler.mode,
+        delivered=delivery["delivered"],
+        queued_for_next_flush_in_seconds=delivery.get("queued_for_next_flush_in_seconds"),
     )
 
 
@@ -101,6 +124,21 @@ async def evaluation_latest() -> dict:
 @app.get("/evaluation/runs")
 async def evaluation_runs(limit: int = 20) -> list[dict]:
     return await evaluation_store.recent_runs(limit)
+
+
+@app.get("/sync/mode")
+async def sync_mode() -> dict:
+    return {"mode": scheduler.mode, "interval_seconds": scheduler.interval}
+
+
+@app.get("/sync/pending")
+async def sync_pending() -> dict:
+    return {"pending_hospitals": scheduler.pending_hospitals()}
+
+
+@app.get("/sync/deliveries")
+async def sync_deliveries(limit: int = 50) -> list[dict]:
+    return scheduler.recent_deliveries(limit)
 
 
 @app.get("/ambulance/recommend")

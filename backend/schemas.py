@@ -24,6 +24,9 @@ class SyncDecisionOut(BaseModel):
     tier: SyncTier
     reason: str
     timestamp: datetime
+    sync_mode: str
+    delivered: bool
+    queued_for_next_flush_in_seconds: float | None = None
 
 
 class HospitalStateOut(BaseModel):
