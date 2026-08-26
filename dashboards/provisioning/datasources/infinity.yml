@@ -1,0 +1,12 @@
+apiVersion: 1
+
+datasources:
+  - name: CARESync Backend
+    uid: caresync-backend
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      allowedHosts:
+        - http://backend:8000

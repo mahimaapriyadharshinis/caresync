@@ -1,0 +1,145 @@
+{
+  "uid": "caresync-comparison",
+  "title": "CARESync: Adaptive vs Continuous vs Periodic",
+  "tags": ["caresync"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Communication overhead: messages sent per strategy",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "xField": "strategy", "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://backend:8000/evaluation/latest",
+          "url_options": { "method": "GET" },
+          "root_selector": "strategies",
+          "columns": [
+            { "selector": "strategy", "text": "strategy", "type": "string" },
+            { "selector": "messages_sent", "text": "messages_sent", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "barchart",
+      "title": "Average staleness per strategy (seconds)",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": { "xField": "strategy", "legend": { "showLegend": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://backend:8000/evaluation/latest",
+          "url_options": { "method": "GET" },
+          "root_selector": "strategies",
+          "columns": [
+            { "selector": "strategy", "text": "strategy", "type": "string" },
+            { "selector": "avg_staleness_seconds", "text": "avg_staleness_seconds", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Adaptive: avg staleness for CRITICAL events (s)",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 9 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://backend:8000/evaluation/latest",
+          "url_options": { "method": "GET" },
+          "root_selector": "$",
+          "columns": [
+            { "selector": "adaptive_critical_avg_staleness_seconds", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Periodic would-be staleness for the SAME critical events (s)",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 9 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://backend:8000/evaluation/latest",
+          "url_options": { "method": "GET" },
+          "root_selector": "$",
+          "columns": [
+            { "selector": "periodic_would_be_staleness_for_critical_events_seconds", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Critical events in this run",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 9 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "caresync-backend" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "parser": "backend",
+          "url": "http://backend:8000/evaluation/latest",
+          "url_options": { "method": "GET" },
+          "root_selector": "$",
+          "columns": [
+            { "selector": "critical_events", "text": "value", "type": "number" }
+          ]
+        }
+      ]
+    }
+  ]
+}

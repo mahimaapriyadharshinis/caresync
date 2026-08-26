@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 from deployment_config import HOSPITAL_MACS
 from sync_engine import AdaptiveSyncEngine, ResourceUpdate, SyncTier
 
+from . import evaluation_store
 from .congestion import CongestionProvider
 from .controller_client import ControllerClient
 from .schemas import HospitalStateOut, ResourceUpdateIn, SyncDecisionOut
@@ -86,3 +87,16 @@ async def set_congestion(hospital_id: str, value: float) -> dict:
         raise HTTPException(status_code=400, detail="value must be within 0..1")
     congestion.set(hospital_id, value)
     return {"hospital_id": hospital_id, "congestion": value}
+
+
+@app.get("/evaluation/latest")
+async def evaluation_latest() -> dict:
+    result = await evaluation_store.latest_run()
+    if result is None:
+        raise HTTPException(status_code=404, detail="no evaluation runs yet — run evaluation/run_comparison.py")
+    return result
+
+
+@app.get("/evaluation/runs")
+async def evaluation_runs(limit: int = 20) -> list[dict]:
+    return await evaluation_store.recent_runs(limit)

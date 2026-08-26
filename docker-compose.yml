@@ -10,8 +10,11 @@ services:
     image: grafana/grafana:11.1.0
     ports:
       - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./dashboards/provisioning:/etc/grafana/provisioning
     depends_on:
       - mongo
 
