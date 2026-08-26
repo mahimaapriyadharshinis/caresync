@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
-from sync_engine import AdaptiveSyncEngine, ResourceUpdate
+from deployment_config import HOSPITAL_MACS
+from sync_engine import AdaptiveSyncEngine, ResourceUpdate, SyncTier
 
 from .congestion import CongestionProvider
+from .controller_client import ControllerClient
 from .schemas import HospitalStateOut, ResourceUpdateIn, SyncDecisionOut
 from .storage import get_store
 
@@ -20,6 +22,7 @@ app = FastAPI(title="CARESync Backend", version="0.1.0")
 engine = AdaptiveSyncEngine()
 store = get_store()
 congestion = CongestionProvider()
+controller = ControllerClient()
 
 
 @app.post("/hospitals/{hospital_id}/update", response_model=SyncDecisionOut)
@@ -39,6 +42,13 @@ async def report_update(hospital_id: str, payload: ResourceUpdateIn) -> SyncDeci
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     score = engine.evaluate(update, congestion.get(hospital_id))
+
+    mac = HOSPITAL_MACS.get(hospital_id)
+    if mac is not None:
+        if score.tier == SyncTier.CRITICAL:
+            controller.mark_critical(mac)
+        else:
+            controller.clear_critical(mac)
 
     await store.set_value(hospital_id, payload.resource.value, payload.new_value, payload.capacity)
     await store.record_decision(update, score)

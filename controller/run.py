@@ -18,6 +18,7 @@ APPS = [
     "os_ken.controller.ofp_handler",
     "controller.flow_manager",
     "controller.congestion_monitor",
+    "controller.rest_api",
 ]
 
 

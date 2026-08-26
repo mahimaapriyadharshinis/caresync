@@ -66,3 +66,12 @@ def test_value_exceeding_capacity_is_rejected_with_400():
 def test_invalid_congestion_value_is_rejected():
     resp = client.put("/network/congestion/hosp-a", params={"value": 1.5})
     assert resp.status_code == 400
+
+
+def test_known_hospital_triggers_controller_hook_without_raising():
+    """hospA is in deployment_config.HOSPITAL_MACS, so this exercises the
+    controller-notification branch. CONTROLLER_URL is unset in tests, so
+    the client is disabled and this must be a silent no-op."""
+    client.post("/hospitals/hospA/update", json={"resource": "icu_beds", "new_value": 3, "capacity": 10})
+    resp = client.post("/hospitals/hospA/update", json={"resource": "icu_beds", "new_value": 0, "capacity": 10})
+    assert resp.json()["tier"] == "critical"

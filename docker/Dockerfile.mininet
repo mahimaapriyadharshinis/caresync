@@ -18,6 +18,7 @@ RUN chmod +x /usr/local/bin/start-ovs.sh
 COPY controller /caresync/controller
 COPY topology /caresync/topology
 COPY sync_engine /caresync/sync_engine
+COPY deployment_config.py /caresync/deployment_config.py
 
 ENV PYTHONPATH=/caresync
 WORKDIR /caresync

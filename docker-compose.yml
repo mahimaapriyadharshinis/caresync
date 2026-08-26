@@ -21,6 +21,11 @@ services:
       dockerfile: docker/Dockerfile.hospital
     environment:
       - MONGO_URL=mongodb://mongo:27017
+      # Points at the SDN controller's REST hook (controller/rest_api.py),
+      # run separately via docker/Dockerfile.mininet — see
+      # docs/environment-notes.md. Best-effort: if that container isn't
+      # running or reachable, the backend still works fine on its own.
+      - CONTROLLER_URL=http://caresync-net:8080
     ports:
       - "8000:8000"
     depends_on:
