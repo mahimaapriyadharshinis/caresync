@@ -30,6 +30,17 @@ PRIORITY_DEFAULT = 1
 PRIORITY_CRITICAL = 100
 CRITICAL_IDLE_TIMEOUT = 5
 
+# Every installed flow — not just CRITICAL ones — carries a bounded
+# idle timeout. This is the proposal's own risk mitigation for
+# controller-bottleneck risk: proactive timeouts mean the switch's flow
+# table only ever caches *recently valid* routing state and expires the
+# rest on its own, instead of accumulating every MAC pair it has ever
+# seen for the life of the switch. DEFAULT_IDLE_TIMEOUT is long enough
+# that ordinary traffic isn't relearned every few packets, short enough
+# that a stale entry (a host that moved, or disconnected) doesn't sit
+# in the table indefinitely.
+DEFAULT_IDLE_TIMEOUT = 60
+
 
 class FlowManager(app_manager.OSKenApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -96,7 +107,7 @@ class FlowManager(app_manager.OSKenApp):
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
             priority = PRIORITY_CRITICAL if src in self.critical_hosts else PRIORITY_DEFAULT
-            idle_timeout = CRITICAL_IDLE_TIMEOUT if priority == PRIORITY_CRITICAL else 0
+            idle_timeout = CRITICAL_IDLE_TIMEOUT if priority == PRIORITY_CRITICAL else DEFAULT_IDLE_TIMEOUT
             buffer_id = msg.buffer_id if msg.buffer_id != ofproto.OFP_NO_BUFFER else None
             self._add_flow(datapath, priority, match, actions, idle_timeout, buffer_id)
             if buffer_id is not None:
