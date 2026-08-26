@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 
+from ambulance.router import choose_hospital, rank_hospitals
 from deployment_config import HOSPITAL_MACS
-from sync_engine import AdaptiveSyncEngine, ResourceUpdate, SyncTier
+from sync_engine import AdaptiveSyncEngine, ResourceType, ResourceUpdate, SyncTier
 
 from . import evaluation_store
 from .congestion import CongestionProvider
@@ -100,3 +101,22 @@ async def evaluation_latest() -> dict:
 @app.get("/evaluation/runs")
 async def evaluation_runs(limit: int = 20) -> list[dict]:
     return await evaluation_store.recent_runs(limit)
+
+
+@app.get("/ambulance/recommend")
+async def ambulance_recommend(resource: ResourceType) -> dict:
+    """The scenario from the project's own motivation slide, made
+    concrete: given the latest known state of every hospital, which one
+    should an ambulance be routed to for `resource`?"""
+    states = await store.all_states()
+    ranked = rank_hospitals(states, resource.value)
+    if not ranked:
+        raise HTTPException(
+            status_code=404,
+            detail=f"no hospital currently has capacity for {resource.value}",
+        )
+    return {
+        "resource": resource.value,
+        "recommended_hospital": choose_hospital(states, resource.value),
+        "ranked_hospitals": [{"hospital_id": h, "remaining": v} for h, v in ranked],
+    }

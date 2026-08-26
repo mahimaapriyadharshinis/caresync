@@ -17,6 +17,7 @@ from sync_engine import ResourceUpdate, ScoreResult
 
 class Storage(Protocol):
     async def get_state(self, hospital_id: str) -> dict[str, int]: ...
+    async def all_states(self) -> dict[str, dict[str, int]]: ...
     async def set_value(self, hospital_id: str, resource: str, value: int, capacity: int) -> None: ...
     async def record_decision(self, update: ResourceUpdate, score: ScoreResult) -> None: ...
     async def recent_decisions(self, limit: int = 50) -> list[dict]: ...
@@ -29,6 +30,9 @@ class InMemoryStore:
 
     async def get_state(self, hospital_id: str) -> dict[str, int]:
         return dict(self._state.get(hospital_id, {}))
+
+    async def all_states(self) -> dict[str, dict[str, int]]:
+        return {hospital_id: dict(resources) for hospital_id, resources in self._state.items()}
 
     async def set_value(self, hospital_id: str, resource: str, value: int, capacity: int) -> None:
         self._state.setdefault(hospital_id, {})[resource] = value
@@ -68,6 +72,11 @@ class MongoStore:
     async def get_state(self, hospital_id: str) -> dict[str, int]:
         doc = await self._hospitals.find_one({"_id": hospital_id})
         return dict(doc.get("resources", {})) if doc else {}
+
+    async def all_states(self) -> dict[str, dict[str, int]]:
+        cursor = self._hospitals.find()
+        docs = await cursor.to_list(length=None)
+        return {doc["_id"]: dict(doc.get("resources", {})) for doc in docs}
 
     async def set_value(self, hospital_id: str, resource: str, value: int, capacity: int) -> None:
         await self._hospitals.update_one(

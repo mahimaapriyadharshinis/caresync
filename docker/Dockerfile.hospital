@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY sync_engine ./sync_engine
 COPY backend ./backend
 COPY simulation ./simulation
+COPY ambulance ./ambulance
 COPY deployment_config.py .
 
 EXPOSE 8000
