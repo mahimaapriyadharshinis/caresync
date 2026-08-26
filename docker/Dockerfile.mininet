@@ -1,0 +1,26 @@
+# Mininet + Open vSwitch + os-ken controller, in one image.
+#
+# Base image already bundles Mininet and Open vSwitch; this layer adds
+# the SDN controller framework and our own code. See
+# docs/environment-notes.md for why os-ken instead of ryu, and why OVS
+# runs in userspace mode.
+FROM iwaseyusuke/mininet:latest
+
+RUN apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends python3-pip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir os-ken eventlet networkx
+
+COPY docker/start-ovs.sh /usr/local/bin/start-ovs.sh
+RUN chmod +x /usr/local/bin/start-ovs.sh
+
+COPY controller /caresync/controller
+COPY topology /caresync/topology
+COPY sync_engine /caresync/sync_engine
+
+ENV PYTHONPATH=/caresync
+WORKDIR /caresync
+
+ENTRYPOINT ["/usr/local/bin/start-ovs.sh"]
+CMD ["sleep", "infinity"]
