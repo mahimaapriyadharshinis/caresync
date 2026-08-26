@@ -15,6 +15,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Iterator
 
+from deployment_config import HOSPITAL_MACS
 from sync_engine import ResourceType, ResourceUpdate
 
 DEFAULT_CAPACITY: dict[str, int] = {
@@ -26,7 +27,10 @@ DEFAULT_CAPACITY: dict[str, int] = {
 
 @dataclass
 class GeneratorConfig:
-    hospital_ids: tuple[str, ...] = ("hospital-a", "hospital-b", "hospital-c")
+    # matches deployment_config.HOSPITAL_MACS — the same hospital IDs the
+    # backend, controller, and topology graph all use, so a generated
+    # trace's hospital_id always resolves to a real node in the topology
+    hospital_ids: tuple[str, ...] = tuple(HOSPITAL_MACS.keys())
     resources: tuple[ResourceType, ...] = (
         ResourceType.ICU_BEDS,
         ResourceType.ER_CAPACITY,

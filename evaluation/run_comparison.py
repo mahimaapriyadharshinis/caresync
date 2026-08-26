@@ -14,6 +14,8 @@ import json
 from datetime import datetime, timezone
 
 from simulation.event_generator import GeneratorConfig, SyntheticEventGenerator
+from topology.network_graph import build_topology_graph
+from topology.network_graph import hospitals as graph_hospitals
 
 from .network_conditions import congestion_at
 from .strategies import StrategyResult, run_adaptive, run_continuous, run_periodic
@@ -29,13 +31,14 @@ def summarize(result: StrategyResult) -> dict:
     }
 
 
-def run(num_events: int, seed: int, num_hospitals: int) -> dict:
+def run(num_events: int, seed: int) -> dict:
     generator = SyntheticEventGenerator(GeneratorConfig(seed=seed))
     events = list(generator.stream(num_events))
+    graph = build_topology_graph()
 
-    continuous = run_continuous(events, num_hospitals)
-    periodic = run_periodic(events, num_hospitals)
-    adaptive = run_adaptive(events, num_hospitals, congestion_at)
+    continuous = run_continuous(events, graph)
+    periodic = run_periodic(events, graph)
+    adaptive = run_adaptive(events, graph, congestion_at)
 
     critical = [d for d in adaptive.deliveries if d.tier == "critical"]
     periodic_by_key = {(d.hospital_id, d.resource, d.event_time): d.staleness for d in periodic.deliveries}
@@ -47,7 +50,7 @@ def run(num_events: int, seed: int, num_hospitals: int) -> dict:
         "run_at": datetime.now(timezone.utc).isoformat(),
         "num_events": num_events,
         "seed": seed,
-        "num_hospitals": num_hospitals,
+        "num_hospitals": len(graph_hospitals(graph)),
         "strategies": [summarize(continuous), summarize(periodic), summarize(adaptive)],
         "critical_events": len(critical),
         "adaptive_critical_avg_staleness_seconds": (
@@ -74,11 +77,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare continuous, periodic, and adaptive sync strategies.")
     parser.add_argument("--events", type=int, default=300)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--hospitals", type=int, default=3)
     parser.add_argument("--mongo-url", default=None, help="e.g. mongodb://localhost:27017")
     args = parser.parse_args()
 
-    result = run(args.events, args.seed, args.hospitals)
+    result = run(args.events, args.seed)
     print(json.dumps(result, indent=2))
 
     if args.mongo_url:
