@@ -27,6 +27,7 @@ class SyncDecisionOut(BaseModel):
     sync_mode: str
     delivered: bool
     queued_for_next_flush_in_seconds: float | None = None
+    is_first_report: bool = False
 
 
 class HospitalStateOut(BaseModel):

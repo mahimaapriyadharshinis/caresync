@@ -108,6 +108,8 @@ caresync/
     congestion.py             pluggable network-congestion signal
     controller_client.py      REST client that notifies the SDN controller of CRITICAL updates
     evaluation_store.py       read access to stored evaluation runs
+    static/index.html         small dashboard UI (served at `/`) — report updates, see tiers,
+                               decisions, evaluation chart, and ambulance recommendations
 
   controller/             SDN controller (os-ken, the maintained fork of Ryu)
     flow_manager.py          L2 learning switch plus priority-aware flow installation
@@ -133,9 +135,9 @@ caresync/
     provisioning/dashboards/    the comparison dashboard definition
 
   docs/
-    environment-notes.md      the two environment-forced deviations from the proposal, explained
+    environment-notes.md      the environment-forced deviations from the proposal, explained
 
-  tests/                  pytest suite covering every module above (34 tests)
+  tests/                  pytest suite covering every module above (60 tests)
   deployment_config.py    shared hospital-id -> MAC address mapping (backend and topology)
   docker-compose.yml      backend + MongoDB + Grafana, one command
   requirements.txt        Python dependencies for the backend/evaluation half
@@ -154,7 +156,7 @@ caresync/
 | Open vSwitch | OpenFlow switches inside the Mininet topology |
 | Docker / Docker Compose | Containerizes the backend, MongoDB, and Grafana |
 | Grafana | Visualizes the strategy-comparison results |
-| pytest | Test suite (34 tests across every module) |
+| pytest | Test suite (60 tests across every module) |
 
 ## Getting Started
 
@@ -165,6 +167,34 @@ The Mininet/Open vSwitch half of this project needs a Linux kernel with network-
 - WSL2 with an Ubuntu distribution (or a native Linux machine)
 - Docker Desktop (or Docker Engine on Linux) with the WSL2 integration enabled
 - Python 3.10+
+
+**On Windows specifically:** the `docker`/`docker compose` commands below work fine from a regular Windows shell (PowerShell or Git Bash) as long as Docker Desktop is running — you don't need to be inside WSL for any of the Docker-based steps (backend + Mongo + Grafana, or the Mininet/controller container). WSL is only needed for the Python virtualenv below (`pytest`, `evaluation.run_comparison`), since that venv is built for Linux. Open a WSL shell (`wsl`) for those steps, or run them inside the `backend` container instead (`docker compose exec backend pytest tests/ -v` also works, since the image already has the dependencies installed).
+
+### Quick check — run everything once
+
+The fastest way to confirm the whole system works, verified end to end:
+
+```bash
+# 1. Backend + Mongo + Grafana (any Windows shell, Docker Desktop running)
+docker compose up -d --build
+```
+
+Then open **http://localhost:8000** in a browser — that's a small dashboard (`backend/static/index.html`) for reporting a resource update and watching the tier/decision/evaluation results without needing curl. `http://localhost:8000/docs` is the same API as raw Swagger, if you'd rather call it directly:
+
+```bash
+curl -X POST localhost:8000/hospitals/hospA/update -H "Content-Type: application/json" \
+  -d '{"resource": "icu_beds", "new_value": 0, "capacity": 10}'
+# -> "tier": "critical"
+
+# 2. Tests + evaluation harness (inside WSL, or via `docker compose exec backend ...`)
+wsl
+source .venv/bin/activate         # skip if running via docker compose exec
+python -m pytest tests/ -v        # 60 passed
+python -m evaluation.run_comparison --events 500 --seed 1 --mongo-url mongodb://localhost:27017
+# -> reproduces the Results table above; visible after at localhost:8000/evaluation/latest
+```
+
+Grafana is at `http://localhost:3000` (`admin`/`admin`) with the comparison dashboard already provisioned once step 2's evaluation run has persisted data. See [Running the System](#running-the-system) below for the Mininet/SDN-controller half, which needs a third, privileged container and a few more steps.
 
 ### Clone and set up the Python environment
 
@@ -192,11 +222,11 @@ docker compose up -d --build
 
 This starts three services:
 
-- `backend` — the FastAPI app, on `http://localhost:8000`
+- `backend` — the FastAPI app, on `http://localhost:8000` (dashboard UI at `/`, Swagger at `/docs`)
 - `mongo` — MongoDB, on `localhost:27017`
 - `grafana` — on `http://localhost:3000` (default login `admin` / `admin`), with the comparison dashboard already provisioned
 
-Try it:
+Try it from the dashboard at `http://localhost:8000`, or with curl:
 
 ```bash
 curl -X POST localhost:8000/hospitals/hospA/update \
@@ -254,14 +284,15 @@ source .venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-34 tests, covering the Adaptive Sync Engine's decision logic, the synthetic event generator, the FastAPI backend, the controller REST client, and the strategy-comparison harness — including tests that assert the project's actual empirical claims (for example, that adaptive keeps critical-event staleness near zero while periodic does not).
+60 tests, covering the Adaptive Sync Engine's decision logic, the synthetic event generator, the FastAPI backend, the controller REST client, and the strategy-comparison harness — including tests that assert the project's actual empirical claims (for example, that adaptive keeps critical-event staleness near zero while periodic does not).
 
 ## Environment Notes
 
-Two implementation choices deviate from a literal reading of the original proposal, both forced by the development environment rather than chosen for convenience. Full detail in `docs/environment-notes.md`; summary:
+Two implementation choices deviate from a literal reading of the original proposal, both forced by the development environment rather than chosen for convenience, plus one upstream bug worked around in code. Full detail in `docs/environment-notes.md`; summary:
 
 - **os-ken instead of Ryu.** Plain `pip install ryu` fails on any current Python/setuptools toolchain — Ryu's packaging depends on `setuptools.command.easy_install`, which modern setuptools no longer ships. os-ken is the actively maintained fork of Ryu (OpenStack-maintained after upstream Ryu went inactive), with an identical architecture and API shape; only the import path changes (`os_ken.*` instead of `ryu.*`).
 - **Open vSwitch userspace datapath instead of kernel.** The WSL2 kernel does not ship the `openvswitch.ko` kernel module. Every switch in this project runs OVS's userspace ("netdev") datapath instead, which needs no kernel module and is functionally equivalent for this project's purposes. On a machine with the kernel module available, dropping `datapath="user"` in `topology/hospital_net.py` switches back to the default kernel datapath with no other code changes required.
+- **os-ken's default hub is worked around.** os-ken 4.2.2's default concurrency backend (`OSKEN_HUB_TYPE=native`) crashes on shutdown with `AttributeError: 'HubThread' object has no attribute 'kill'` — an upstream incompatibility between its own `AppManager.run_apps` and that hub's thread wrapper. `controller/run.py` sets `OSKEN_HUB_TYPE=eventlet` before the os-ken import, which avoids it; nothing to do when running `python3 controller/run.py` as documented below.
 
 ## Project Status
 
@@ -271,7 +302,7 @@ Two implementation choices deviate from a literal reading of the original propos
 | 2. Dataset / environment setup | Complete — Mininet topology verified, synthetic event generator built |
 | 3. Algorithm design | Complete — Adaptive Sync Engine, thresholds tuned and tested |
 | 4. Development | Complete — backend, controller, and their integration all verified live |
-| 5. Testing and evaluation | Complete — comparison harness, Grafana dashboard, 34 passing tests |
+| 5. Testing and evaluation | Complete — comparison harness, Grafana dashboard, 60 passing tests |
 | 6. Paper writing | Not started |
 
 Not implemented: the Flower federated-learning extension (marked a stretch goal in the original proposal), and per-hospital containerized Mininet nodes for large-scale simulation (the current setup uses one multi-tenant backend service rather than N separate hospital containers).

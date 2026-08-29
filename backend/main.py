@@ -8,8 +8,10 @@ urgently — to push it across the network.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from ambulance.router import choose_hospital, rank_hospitals
 from deployment_config import HOSPITAL_MACS
@@ -42,6 +44,7 @@ app = FastAPI(title="CARESync Backend", version="0.1.0", lifespan=lifespan)
 @app.post("/hospitals/{hospital_id}/update", response_model=SyncDecisionOut)
 async def report_update(hospital_id: str, payload: ResourceUpdateIn) -> SyncDecisionOut:
     state = await store.get_state(hospital_id)
+    is_first_report = payload.resource.value not in state
     previous_value = state.get(payload.resource.value, payload.new_value)
 
     try:
@@ -89,6 +92,7 @@ async def report_update(hospital_id: str, payload: ResourceUpdateIn) -> SyncDeci
         sync_mode=scheduler.mode,
         delivered=delivery["delivered"],
         queued_for_next_flush_in_seconds=delivery.get("queued_for_next_flush_in_seconds"),
+        is_first_report=is_first_report,
     )
 
 
@@ -158,3 +162,9 @@ async def ambulance_recommend(resource: ResourceType) -> dict:
         "recommended_hospital": choose_hospital(states, resource.value),
         "ranked_hospitals": [{"hospital_id": h, "remaining": v} for h, v in ranked],
     }
+
+
+# Serves backend/static/index.html — a small dashboard for reporting
+# updates and watching sync decisions without needing curl/Swagger.
+# Mounted last so it never shadows the API routes above.
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="frontend")

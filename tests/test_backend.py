@@ -12,6 +12,20 @@ def test_first_update_has_no_baseline_and_is_routine():
     )
     assert resp.status_code == 200
     assert resp.json()["tier"] == "routine"
+    assert resp.json()["is_first_report"] is True
+
+
+def test_second_update_is_not_flagged_as_first_report():
+    client.post(
+        "/hospitals/hosp-first-report/update",
+        json={"resource": "icu_beds", "new_value": 8, "capacity": 10},
+    )
+    resp = client.post(
+        "/hospitals/hosp-first-report/update",
+        json={"resource": "icu_beds", "new_value": 0, "capacity": 10},
+    )
+    assert resp.json()["is_first_report"] is False
+    assert resp.json()["tier"] == "critical"
 
 
 def test_update_dropping_icu_to_zero_is_critical():

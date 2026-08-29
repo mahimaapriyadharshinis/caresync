@@ -44,3 +44,21 @@ If you later move this onto a real Linux machine or a proper Linux VM
 (not WSL2), the kernel module will be present and `datapath="user"` can
 be dropped in favor of the default kernel datapath — nothing else in
 the code needs to change.
+
+## os-ken's default hub crashes on shutdown
+
+os-ken 4.2.2 picks its concurrency backend via the `OSKEN_HUB_TYPE` env
+var, defaulting to `"native"` (plain `threading`) when unset. That
+default is incompatible with os-ken's own `AppManager.run_apps`: its
+shutdown path unconditionally calls `t.kill()` on every app thread, but
+the native-hub thread wrapper (`os_ken.lib.hub.HubThread`) never defines
+`.kill()`. In practice this means the controller crashes with
+`AttributeError: 'HubThread' object has no attribute 'kill'` the moment
+`run_apps` returns — including on totally unrelated failures, since the
+AttributeError masks whatever exception actually triggered shutdown.
+
+`controller/run.py` now sets `OSKEN_HUB_TYPE=eventlet` before importing
+`os_ken.base.app_manager` (the var is read once, at import time), which
+selects the eventlet-backed hub whose spawned greenthreads do implement
+`.kill()`. No config or command-line change needed — just run
+`python3 controller/run.py` as documented.
